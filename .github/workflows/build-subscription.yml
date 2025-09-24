@@ -1,38 +1,42 @@
 name: Build OpenClash Subscription
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "0 */6 * * *"  # запуск каждые 6 часов
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Download configs from NiREvil/vless
         run: |
-          mkdir -p output
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/FI.txt -o output/FI.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/SE.txt -o output/SE.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/EE.txt -o output/EE.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LI.txt -o output/LI.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LT.txt -o output/LT.txt
+          mkdir -p dist
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/FI.txt -o dist/FI.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/SE.txt -o dist/SE.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/EE.txt -o dist/EE.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LI.txt -o dist/LI.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LT.txt -o dist/LT.txt
 
       - name: Combine configs
         run: |
-          cat output/FI.txt \
-              output/SE.txt \
-              output/EE.txt \
-              output/LI.txt \
-              output/LT.txt > output/combined.txt
+          cat dist/FI.txt \
+              dist/SE.txt \
+              dist/EE.txt \
+              dist/LI.txt \
+              dist/LT.txt > dist/combined.txt
 
       - name: Convert to base64
         run: |
-          base64 -w 0 output/combined.txt > output/combined.b64.txt
+          base64 -w 0 dist/combined.txt > dist/combined.b64.txt
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: openclash-subscription
-          path: output/combined.b64.txt
+      - name: Commit and push result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/combined.b64.txt
+          git commit -m "Update subscription [skip ci]" || echo "No changes"
+          git push
