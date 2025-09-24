@@ -111,12 +111,9 @@ ruleset=DIRECT,[]DOMAIN-SUFFIX,example-local-service.com
 ruleset=🚀 节点选择,[]DOMAIN-SUFFIX,blocked-service.com
 ```
 
-## 📊 Источники правил
+## 📊 Источник серверов
 
-| Источник | Тип | Описание |
-|----------|-----|----------|
-| [antifilter.download](https://antifilter.download/list/ip.lst) | IP CIDR | Список заблокированных IP |
-| [MetaCubeX/meta-rules-dat](https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/meta/geo/) | GeoIP/GeoSite | Географические правила |
+[VLESS сервера](https://github.com/NiREvil/vless)
 
 ## 🔄 Автообновление
 
