@@ -15,11 +15,12 @@ jobs:
       - name: Download configs from NiREvil/vless
         run: |
           mkdir -p dist
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/FI.txt -o dist/FI.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/SE.txt -o dist/SE.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/EE.txt -o dist/EE.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LI.txt -o dist/LI.txt
-          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LT.txt -o dist/LT.txt
+          curl -sL https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Finland.txt -o dist/FI.txt
+          curl -sL https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Sweden.txt -o dist/SE.txt
+          curl -sL https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Estonia.txt -o dist/EE.txt
+          curl -sL https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Lithuania.txt -o dist/LI.txt
+          curl -sL https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Latvia.txt -o dist/LT.txt
+          curl -sL https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Norway.txt -o dist/LT.txt
 
       - name: Combine configs
         run: |
