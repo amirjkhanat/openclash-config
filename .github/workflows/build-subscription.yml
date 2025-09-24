@@ -2,7 +2,8 @@ name: Build OpenClash Subscription
 
 on:
   schedule:
-    - cron: "0 */6 * * *"  # запуск каждые 6 часов
+    # Каждый вторник в 00:00 UTC (подставь другое время, см. пояснения ниже)
+    - cron: "0 0 * * 2"
   workflow_dispatch:
 
 jobs:
