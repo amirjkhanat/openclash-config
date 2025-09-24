@@ -1,0 +1,38 @@
+name: Build OpenClash Subscription
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download configs from NiREvil/vless
+        run: |
+          mkdir -p output
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/FI.txt -o output/FI.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/SE.txt -o output/SE.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/EE.txt -o output/EE.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LI.txt -o output/LI.txt
+          curl -sL https://raw.githubusercontent.com/NiREvil/vless/main/sub/country_proxies/LT.txt -o output/LT.txt
+
+      - name: Combine configs
+        run: |
+          cat output/FI.txt \
+              output/SE.txt \
+              output/EE.txt \
+              output/LI.txt \
+              output/LT.txt > output/combined.txt
+
+      - name: Convert to base64
+        run: |
+          base64 -w 0 output/combined.txt > output/combined.b64.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclash-subscription
+          path: output/combined.b64.txt
