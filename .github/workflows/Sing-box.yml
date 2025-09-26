@@ -1,8 +1,62 @@
-      - name: Download sing-box and check proxies via HTTP 204 (clients3.google.com)
+name: Build OpenClash Subscription
+
+on:
+  schedule:
+    # Каждый вторник в 00:00 UTC
+    - cron: "0 0 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo (with write token)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Create dist dir and download country lists (with retries)
+        run: |
+          mkdir -p dist
+          set -e
+          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Finland.txt -o dist/FI.txt || true
+          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Sweden.txt -o dist/SE.txt || true
+          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Estonia.txt -o dist/EE.txt || true
+          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Lithuania.txt -o dist/LT.txt || true
+          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Latvia.txt -o dist/LV.txt || true
+          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Norway.txt -o dist/NO.txt || true
+
+      - name: Show downloaded files (debug)
+        run: |
+          echo "Files in dist:"
+          ls -lah dist || true
+
+      - name: Combine, clean and deduplicate
+        run: |
+          files=""
+          for f in dist/FI.txt dist/SE.txt dist/EE.txt dist/LT.txt dist/LV.txt dist/NO.txt; do
+            [ -f "$f" ] && files="$files $f"
+          done
+
+          if [ -z "$files" ]; then
+            echo "No source files found; creating empty combined.txt"
+            : > dist/combined.txt
+          else
+            cat $files | sed -e 's/\r$//' | sed -n '/\S/p' | awk '!seen[$0]++' > dist/combined.txt
+          fi
+
+          echo "Combined lines:" && wc -l dist/combined.txt
+          head -n 30 dist/combined.txt || true
+
+      - name: Filter working proxies via sing-box (HTTP 204 check)
         shell: bash
         run: |
           set -euo pipefail
-          SB_VER="1.12.8"   # при необходимости обновите (проверяйте релизы sing-box)
+          # версия sing-box можно обновить при необходимости
+          SB_VER="1.12.8"
           TMPDIR=$(mktemp -d)
           cd "$TMPDIR"
 
@@ -12,32 +66,25 @@
           curl -fsSL --retry 3 "$SB_URL" -o "$SB_TGZ"
           tar -xzf "$SB_TGZ" --wildcards --strip-components=1 '*/sing-box' || true
           chmod +x sing-box
-          ./sing-box -h >/dev/null || true
 
-          SRC="../../dist/combined.txt"
-          OUT="../../dist/combined_ok.txt"
+          SRC="$GITHUB_WORKSPACE/dist/combined.txt"
+          OUT="$GITHUB_WORKSPACE/dist/combined_ok.txt"
           : > "$OUT"
 
           SOCKS_PORT=10808
           TIMEOUT_CURL=10
 
-          # helper: run check for a given JSON config (client.json)
           check_with_singbox() {
             cfg="$1"
-            # run sing-box
             ./sing-box run -c "$cfg" >/dev/null 2>&1 &
             PID=$!
-            # give time to start
             sleep 1
-            # try a couple of generate_204 endpoints (if any returns 204 -> OK)
             HTTP_CODE=$(curl --socks5-hostname 127.0.0.1:${SOCKS_PORT} -I --max-time $TIMEOUT_CURL -s -o /dev/null -w "%{http_code}" http://clients3.google.com/generate_204 || echo "000")
             if [ "$HTTP_CODE" != "204" ]; then
               HTTP_CODE2=$(curl --socks5-hostname 127.0.0.1:${SOCKS_PORT} -I --max-time $TIMEOUT_CURL -s -o /dev/null -w "%{http_code}" http://www.gstatic.com/generate_204 || echo "000")
             else
               HTTP_CODE2="$HTTP_CODE"
             fi
-
-            # kill sing-box
             kill $PID >/dev/null 2>&1 || true
             wait $PID 2>/dev/null || true
 
@@ -48,7 +95,6 @@
             fi
           }
 
-          # parse helpers
           parse_vmess() {
             line="$1"
             b64=${line#vmess://}
@@ -56,55 +102,69 @@
             if [ -z "$json" ]; then
               return 1
             fi
-            host=$(echo "$json" | python3 -c "import sys, json; o=json.load(sys.stdin); print(o.get('add',''))" 2>/dev/null || true)
-            port=$(echo "$json" | python3 -c "import sys, json; o=json.load(sys.stdin); print(o.get('port',''))" 2>/dev/null || true)
-            uuid=$(echo "$json" | python3 -c "import sys, json; o=json.load(sys.stdin); print(o.get('id','') or o.get('ps',''))" 2>/dev/null || true)
-            # if uuid empty, try "id" or "id" inside 'id' etc
-            if [ -z "$uuid" ]; then
-              uuid=$(echo "$json" | jq -r '.id // ""' 2>/dev/null || true)
-            fi
-            echo "$host" "$port" "$uuid"
+            host=$(echo "$json" | python3 - <<PY 2>/dev/null
+import sys, json
+try:
+  o=json.load(sys.stdin)
+  print(o.get("add",""))
+except:
+  pass
+PY
+)
+            port=$(echo "$json" | python3 - <<PY 2>/dev/null
+import sys, json
+try:
+  o=json.load(sys.stdin)
+  print(o.get("port",""))
+except:
+  pass
+PY
+)
+            idv=$(echo "$json" | python3 - <<PY 2>/dev/null
+import sys, json
+try:
+  o=json.load(sys.stdin)
+  print(o.get("id","") or o.get("uuid","") or o.get("ps",""))
+except:
+  pass
+PY
+)
+            echo "$host" "$port" "$idv"
             return 0
           }
 
           parse_vless() {
             line="$1"
-            # vless://UUID@host:port?...
             proto_removed=${line#vless://}
             before_q=${proto_removed%%\?*}
             uuid=$(echo "$before_q" | cut -d'@' -f1)
             hostport=$(echo "$before_q" | cut -d'@' -f2-)
-            host=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' 2>/dev/null || true)
-            port=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' 2>/dev/null || true)
+            host=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' || true)
+            port=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' || true)
             echo "$host" "$port" "$uuid"
             return 0
           }
 
           parse_trojan() {
             line="$1"
-            # trojan://password@host:port?...
             proto_removed=${line#trojan://}
             before_q=${proto_removed%%\?*}
             password=$(echo "$before_q" | cut -d'@' -f1)
             hostport=$(echo "$before_q" | cut -d'@' -f2-)
-            host=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' 2>/dev/null || true)
-            port=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' 2>/dev/null || true)
+            host=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' || true)
+            port=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' || true)
             echo "$host" "$port" "$password"
             return 0
           }
 
           parse_ss() {
             line="$1"
-            # ss://base64@host:port  OR ss://method:pass@host:port OR ss://base64
             uri=${line#ss://}
-            # if contains '@' after scheme and before ':port', handle both
             if echo "$uri" | grep -q "@"; then
               left=${uri%@*}
               right=${uri#*@}
-              # right is host:port...
-              host=$(echo "$right" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' 2>/dev/null || true)
-              port=$(echo "$right" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' 2>/dev/null || true)
-              # left may be base64 (method:pass) or plain method:pass
+              host=$(echo "$right" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' || true)
+              port=$(echo "$right" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' || true)
               if echo "$left" | grep -qE '^[A-Za-z0-9+/=]+$' ; then
                 creds=$(echo "$left" | base64 --decode 2>/dev/null || true)
               else
@@ -115,16 +175,14 @@
               echo "$host" "$port" "$method" "$password"
               return 0
             else
-              # ss://<base64> maybe contains method:pass@host:port encoded; try decode full uri
               dec=$(echo "$uri" | base64 --decode 2>/dev/null || true)
               if [ -n "$dec" ]; then
-                # dec format: method:password@host:port
                 method=$(echo "$dec" | cut -d: -f1)
                 rest=$(echo "$dec" | cut -d: -f2-)
                 password=$(echo "$rest" | cut -d@ -f1)
                 hostport=$(echo "$rest" | cut -d@ -f2-)
-                host=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' 2>/dev/null || true)
-                port=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' 2>/dev/null || true)
+                host=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\1/' || true)
+                port=$(echo "$hostport" | sed -E 's/^\[?([^]]+)\]?:([0-9]+).*$/\2/' || true)
                 echo "$host" "$port" "$method" "$password"
                 return 0
               fi
@@ -133,34 +191,27 @@
           }
 
           # iterate lines
+          if [ ! -f "$SRC" ]; then
+            echo "No combined file: $SRC"
+            cd - >/dev/null 2>&1 || true
+            rm -rf "$TMPDIR"
+            exit 0
+          fi
+
           while IFS= read -r line || [ -n "$line" ]; do
             [ -z "${line//[[:space:]]/}" ] && continue
             echo "CHECK: $line"
-            ok=1
-            # create temp cfg file
             CFG=$(mktemp -p . --suffix .json)
             handled=0
 
             if [[ "$line" =~ ^vmess:// ]]; then
-              read host port uuid <<< "$(parse_vmess "$line" || echo '')"
-              if [ -n "$host" ] && [ -n "$port" ] && [ -n "$uuid" ]; then
+              read host port idv <<< "$(parse_vmess "$line" || echo '')"
+              if [ -n "$host" ] && [ -n "$port" ] && [ -n "$idv" ]; then
                 cat > "$CFG" <<JSON
 {
   "log": { "level": "error" },
-  "inbounds": [
-    { "type": "socks", "tag": "socks-in", "server": "127.0.0.1", "port": ${SOCKS_PORT} }
-  ],
-  "outbounds": [
-    { "type": "direct", "tag": "direct" },
-    {
-      "type": "vmess",
-      "tag": "vmess-out",
-      "server": "${host}",
-      "server_port": ${port},
-      "uuid": "${uuid}",
-      "security": "auto"
-    }
-  ]
+  "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
+  "outbounds": [ { "type": "direct" }, { "type": "vmess", "server": "${host}", "server_port": ${port}, "uuid": "${idv}", "security": "auto" } ]
 }
 JSON
                 handled=1
@@ -172,19 +223,8 @@ JSON
                 cat > "$CFG" <<JSON
 {
   "log": { "level": "error" },
-  "inbounds": [
-    { "type": "socks", "tag": "socks-in", "server": "127.0.0.1", "port": ${SOCKS_PORT} }
-  ],
-  "outbounds": [
-    { "type": "direct", "tag": "direct" },
-    {
-      "type": "vless",
-      "tag": "vless-out",
-      "server": "${host}",
-      "server_port": ${port},
-      "uuid": "${uuid}"
-    }
-  ]
+  "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
+  "outbounds": [ { "type": "direct" }, { "type": "vless", "server": "${host}", "server_port": ${port}, "uuid": "${uuid}" } ]
 }
 JSON
                 handled=1
@@ -196,19 +236,8 @@ JSON
                 cat > "$CFG" <<JSON
 {
   "log": { "level": "error" },
-  "inbounds": [
-    { "type": "socks", "tag": "socks-in", "server": "127.0.0.1", "port": ${SOCKS_PORT} }
-  ],
-  "outbounds": [
-    { "type": "direct", "tag": "direct" },
-    {
-      "type": "trojan",
-      "tag": "trojan-out",
-      "server": "${host}",
-      "server_port": ${port},
-      "password": "${password}"
-    }
-  ]
+  "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
+  "outbounds": [ { "type": "direct" }, { "type": "trojan", "server": "${host}", "server_port": ${port}, "password": "${password}" } ]
 }
 JSON
                 handled=1
@@ -221,20 +250,8 @@ JSON
                   cat > "$CFG" <<JSON
 {
   "log": { "level": "error" },
-  "inbounds": [
-    { "type": "socks", "tag": "socks-in", "server": "127.0.0.1", "port": ${SOCKS_PORT} }
-  ],
-  "outbounds": [
-    { "type": "direct", "tag": "direct" },
-    {
-      "type": "shadowsocks",
-      "tag": "ss-out",
-      "server": "${host}",
-      "server_port": ${port},
-      "method": "${method}",
-      "password": "${password}"
-    }
-  ]
+  "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
+  "outbounds": [ { "type": "direct" }, { "type": "shadowsocks", "server": "${host}", "server_port": ${port}, "method": "${method}", "password": "${password}" } ]
 }
 JSON
                   handled=1
@@ -248,7 +265,6 @@ JSON
               continue
             fi
 
-            # run check
             if check_with_singbox "$CFG"; then
               echo "OK -> keep"
               echo "$line" >> "$OUT"
@@ -259,12 +275,30 @@ JSON
             rm -f "$CFG" || true
           done < "$SRC"
 
-          # replace combined with ok list
           if [ -s "$OUT" ]; then
-            mv "$OUT" ../../dist/combined.txt
+            mv "$OUT" "$GITHUB_WORKSPACE/dist/combined.txt"
           else
-            : > ../../dist/combined.txt
+            : > "$GITHUB_WORKSPACE/dist/combined.txt"
           fi
 
-          cd -
+          cd - >/dev/null 2>&1 || true
           rm -rf "$TMPDIR"
+
+      - name: Validate content (must contain protocol URIs)
+        run: |
+          if grep -E -i '(ss://|vless://|vmess://|trojan://|hysteria://)' dist/combined.txt >/dev/null; then
+            echo "OK: protocol URIs present" && echo "1" > dist/has_protocols
+          else
+            echo "WARN: no protocol URIs found - will NOT update subscription" && rm -f dist/has_protocols || true
+          fi
+
+      - name: Encode and prepare output
+        run: |
+          if [ -f dist/has_protocols ]; then
+            base64 -w 0 dist/combined.txt > dist/combined.b64.txt
+          else
+            echo -n "" > dist/combined.b64.txt
+          fi
+          ls -lh dist/combined.b64.txt
+
+      - name: Commit and push onl
