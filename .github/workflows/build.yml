@@ -2,7 +2,7 @@ name: Build OpenClash Subscription
 
 on:
   schedule:
-    # Каждый вторник в 00:00 UTC
+    # Каждый вторник 00:00 UTC
     - cron: "0 0 * * 2"
   workflow_dispatch:
 
@@ -27,7 +27,6 @@ jobs:
           curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Estonia.txt -o dist/EE.txt || true
           curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Lithuania.txt -o dist/LI.txt || true
           curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Latvia.txt -o dist/LT.txt || true
-          # Norway сохраняем в NO.txt (исправлено)
           curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Norway.txt -o dist/NO.txt || true
 
       - name: Show downloaded files (debug)
