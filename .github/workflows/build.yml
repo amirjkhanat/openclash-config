@@ -182,7 +182,7 @@ jobs:
             if [[ "$line" =~ ^vmess:// ]]; then
               read host port idv <<< "$(parse_vmess "$line" || echo '')"
               if [ -n "$host" ] && [ -n "$port" ] && [ -n "$idv" ]; then
-                cat > "$CFG" <<JSON
+                cat > "$CFG" <<'JSON'
 {
   "log": { "level": "error" },
   "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
@@ -195,7 +195,7 @@ JSON
             elif [[ "$line" =~ ^vless:// ]]; then
               read host port uuid <<< "$(parse_vless "$line" || echo '')"
               if [ -n "$host" ] && [ -n "$port" ] && [ -n "$uuid" ]; then
-                cat > "$CFG" <<JSON
+                cat > "$CFG" <<'JSON'
 {
   "log": { "level": "error" },
   "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
@@ -208,7 +208,7 @@ JSON
             elif [[ "$line" =~ ^trojan:// ]]; then
               read host port password <<< "$(parse_trojan "$line" || echo '')"
               if [ -n "$host" ] && [ -n "$port" ] && [ -n "$password" ]; then
-                cat > "$CFG" <<JSON
+                cat > "$CFG" <<'JSON'
 {
   "log": { "level": "error" },
   "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
@@ -222,7 +222,7 @@ JSON
               if parse_ss "$line" >/dev/null 2>&1; then
                 read host port method password <<< "$(parse_ss "$line" || echo '')"
                 if [ -n "$host" ] && [ -n "$port" ] && [ -n "$method" ] && [ -n "$password" ]; then
-                  cat > "$CFG" <<JSON
+                  cat > "$CFG" <<'JSON'
 {
   "log": { "level": "error" },
   "inbounds": [ { "type": "socks", "server": "127.0.0.1", "port": ${SOCKS_PORT} } ],
