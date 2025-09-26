@@ -55,7 +55,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # версия sing-box можно обновить при необходимости
           SB_VER="1.12.8"
           TMPDIR=$(mktemp -d)
           cd "$TMPDIR"
@@ -102,33 +101,9 @@ jobs:
             if [ -z "$json" ]; then
               return 1
             fi
-            host=$(echo "$json" | python3 - <<PY 2>/dev/null
-import sys, json
-try:
-  o=json.load(sys.stdin)
-  print(o.get("add",""))
-except:
-  pass
-PY
-)
-            port=$(echo "$json" | python3 - <<PY 2>/dev/null
-import sys, json
-try:
-  o=json.load(sys.stdin)
-  print(o.get("port",""))
-except:
-  pass
-PY
-)
-            idv=$(echo "$json" | python3 - <<PY 2>/dev/null
-import sys, json
-try:
-  o=json.load(sys.stdin)
-  print(o.get("id","") or o.get("uuid","") or o.get("ps",""))
-except:
-  pass
-PY
-)
+            host=$(echo "$json" | python3 -c 'import sys, json; o=json.load(sys.stdin); print(o.get("add",""))' 2>/dev/null || true)
+            port=$(echo "$json" | python3 -c 'import sys, json; o=json.load(sys.stdin); print(o.get("port",""))' 2>/dev/null || true)
+            idv=$(echo "$json" | python3 -c 'import sys, json; o=json.load(sys.stdin); print(o.get("id","") or o.get("uuid","") or o.get("ps",""))' 2>/dev/null || true)
             echo "$host" "$port" "$idv"
             return 0
           }
@@ -301,4 +276,14 @@ JSON
           fi
           ls -lh dist/combined.b64.txt
 
-      - name: Commit and push onl
+      - name: Commit and push only if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/combined.b64.txt || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Update subscription (FI,SE,EE,LT,LV,NO) [skip ci]" || (echo "commit failed" && exit 1)
+          git push || (echo "git push failed — проверь Workflow permissions" && exit 1)
