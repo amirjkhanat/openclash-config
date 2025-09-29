@@ -22,12 +22,7 @@ jobs:
         run: |
           mkdir -p dist
           set -e
-          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Finland.txt -o dist/FI.txt || true
-          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Sweden.txt -o dist/SE.txt || true
-          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Estonia.txt -o dist/EE.txt || true
-          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Lithuania.txt -o dist/LI.txt || true
-          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Latvia.txt -o dist/LT.txt || true
-          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/10ium/ScrapeAndCategorize/refs/heads/main/output_configs/Norway.txt -o dist/NO.txt || true
+          curl -fsSL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/Danialsamadi/v2go/main/All_Configs_Sub.txt -o dist/scrapped.txt || true
 
       - name: Show downloaded files (debug)
         run: |
@@ -37,7 +32,7 @@ jobs:
       - name: Combine, clean and deduplicate
         run: |
           files=""
-          for f in dist/FI.txt dist/SE.txt dist/EE.txt dist/LI.txt dist/LT.txt dist/NO.txt; do
+          for f in dist/scrapped.txt; do
             [ -f "$f" ] && files="$files $f"
           done
 
@@ -77,5 +72,5 @@ jobs:
             echo "No changes to commit"
             exit 0
           fi
-          git commit -m "Update subscription (FI,SE,EE,LI,LT,NO) [skip ci]" || (echo "commit failed" && exit 1)
+          git commit -m "Update subscription [skip ci]" || (echo "commit failed" && exit 1)
           git push || (echo "git push failed — проверь Workflow permissions" && exit 1)
