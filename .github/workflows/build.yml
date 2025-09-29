@@ -70,6 +70,20 @@ jobs:
           git add dist/combined.b64.txt || true
           if git diff --cached --quiet; then
             echo "No changes to commit"
+          exit 0
+          fi
+          git commit -m "Update subscription [skip ci]" || (echo "commit failed" && exit 1)
+          git fetch origin main
+          git merge --ff-only origin/main || exit 1
+          git push || (echo "git push failed — проверь Workflow permissions" && exit 1)
+
+      - name: Commit and push only if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/combined.b64.txt || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
             exit 0
           fi
           git commit -m "Update subscription [skip ci]" || (echo "commit failed" && exit 1)
